@@ -1,0 +1,41 @@
+name: BYZOOM 每日巡價監控
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  price-monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 取得程式碼
+        uses: actions/checkout@v4
+
+      - name: 🐍 設定 Python 環境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 安裝套件
+        run: |
+          pip install requests beautifulsoup4 lxml
+
+      - name: 🔍 執行巡價
+        env:
+          GMAIL_USER:     ${{ secrets.GMAIL_USER }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+          NOTIFY_EMAIL:   ${{ secrets.NOTIFY_EMAIL }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        run: |
+          python src/monitor.py
+
+      - name: 📄 上傳巡價報告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: price-report-${{ github.run_number }}
+          path: price_report.json
+          retention-days: 30
