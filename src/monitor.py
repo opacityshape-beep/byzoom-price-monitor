@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 BYZOOM FITNESS 每日巡價監控工具
-每天自動比對各電商平台價格，發現破價立即 Email 通知
+每天自動比對各電商平台價格，發現破價立即通知
 """
 
 import requests
@@ -18,9 +18,11 @@ import os
 # ============================================================
 # 設定區（GitHub Actions Secrets 帶入）
 # ============================================================
-GMAIL_USER     = os.environ.get("GMAIL_USER", "")
-GMAIL_PASSWORD = os.environ.get("GMAIL_PASSWORD", "")
-NOTIFY_EMAIL   = os.environ.get("NOTIFY_EMAIL", "")
+GMAIL_USER        = os.environ.get("GMAIL_USER", "")
+GMAIL_PASSWORD    = os.environ.get("GMAIL_PASSWORD", "")
+NOTIFY_EMAIL      = os.environ.get("NOTIFY_EMAIL", "")
+TELEGRAM_TOKEN    = os.environ.get("TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID  = os.environ.get("TELEGRAM_CHAT_ID", "8839726246")
 
 HEADERS = {
     "User-Agent": (
@@ -33,8 +35,6 @@ HEADERS = {
 
 # ============================================================
 # 官網商品清單與售價（排除七龍珠）
-# 以官網 byzoomfitness.com 目前售價為基準
-# 如需更新價格，請修改此字典
 # ============================================================
 OFFICIAL_PRODUCTS = [
     # === 可調式啞鈴 Pure Series ===
@@ -49,11 +49,9 @@ OFFICIAL_PRODUCTS = [
     {"title": "Pure Series 25kg(55LB) 15段重量 可調式啞鈴(白)", "price": 5980, "url": "https://byzoomfitness.com/products/pure-series-adjustable-dumbbell-55lb-white"},
     {"title": "Pure Series 25kg(55LB) 15段重量 可調式啞鈴(黑)", "price": 5980, "url": "https://byzoomfitness.com/products/pure-series-adjustable-dumbbell-55lb-black"},
     {"title": "Pure Series 34kg(75LB) 21段重量 可調式啞鈴(黑)", "price": 7980, "url": "https://byzoomfitness.com/products/pure-series-adjustable-dumbbell-75lb-black"},
-
     # === 可調式啞鈴 Classic Series ===
     {"title": "Classic Series 22.6kg(50LB) 5段重量 可調式啞鈴(黑)", "price": 4000, "url": "https://byzoomfitness.com/products/classic-series-adjustable-dumbbell-50lb-black"},
     {"title": "Classic Series 25kg(55LB) 15段重量 可調式啞鈴(黑)", "price": 4800, "url": "https://byzoomfitness.com/products/classic-series-adjustable-dumbbell-55lb-black"},
-
     # === 可調式壺鈴 Pure Series ===
     {"title": "Pure Series 13.6kg(30LB) 5段重量 可調式壺鈴(白)", "price": 2980, "url": "https://byzoomfitness.com/products/pure-series-adjustable-kettlebell-30lb-white"},
     {"title": "Pure Series 13.6kg(30LB) 5段重量 可調式壺鈴(黑)", "price": 2980, "url": "https://byzoomfitness.com/products/pure-series-adjustable-kettlebell-30lb-black"},
@@ -61,26 +59,22 @@ OFFICIAL_PRODUCTS = [
     {"title": "Pure Series 18.1kg(40LB) 5段重量 可調式壺鈴(黑)", "price": 3980, "url": "https://byzoomfitness.com/products/pure-series-adjustable-kettlebell-40lb-black"},
     {"title": "Pure Series 22.6kg(50LB) 5段重量 可調式壺鈴(白)", "price": 4980, "url": "https://byzoomfitness.com/products/pure-series-adjustable-kettlebell-50lb-white"},
     {"title": "Pure Series 22.6kg(50LB) 5段重量 可調式壺鈴(黑)", "price": 4980, "url": "https://byzoomfitness.com/products/pure-series-adjustable-kettlebell-50lb-black"},
-
     # === 可調式槓鈴 ===
     {"title": "Pure Series 36.2kg(80LB) 14段重量 可調式槓鈴(黑)", "price": 8800, "url": "https://byzoomfitness.com/products/pure-series-adjustable-barbell-80lb-black"},
-    {"title": "Pure Series Max 45.3kg(100LB) 可調式槓鈴轉換架 for 25kg(55lb)(黑)", "price": 11800, "url": "https://byzoomfitness.com/products/pure-series-barbell-converter-55lb-black"},
-    {"title": "Pure Series Max 45.3kg(100LB) 可調式槓鈴轉換架 for 25kg(55lb)(白)", "price": 11800, "url": "https://byzoomfitness.com/products/pure-series-barbell-converter-55lb-white"},
-    {"title": "Pure Series Max 63.5kg(140LB) 可調式槓鈴轉換架 for 34kg(75lb)(黑)", "price": 13800, "url": "https://byzoomfitness.com/products/pure-series-barbell-converter-75lb-black"},
+    {"title": "Pure Series Max 45.3kg(100LB) 可調式槓鈴轉換架(黑)", "price": 11800, "url": "https://byzoomfitness.com/products/pure-series-barbell-converter-55lb-black"},
+    {"title": "Pure Series Max 45.3kg(100LB) 可調式槓鈴轉換架(白)", "price": 11800, "url": "https://byzoomfitness.com/products/pure-series-barbell-converter-55lb-white"},
+    {"title": "Pure Series Max 63.5kg(140LB) 可調式槓鈴轉換架(黑)", "price": 13800, "url": "https://byzoomfitness.com/products/pure-series-barbell-converter-75lb-black"},
     {"title": "Pure Series Easy Bar 4.5KG(10LB) 專用槓鈴桿(白)", "price": 1680, "url": "https://byzoomfitness.com/products/pure-series-easy-bar-10lb-white"},
     {"title": "Pure Series Easy Bar 4.5KG(10LB) 專用槓鈴桿(黑)", "price": 1680, "url": "https://byzoomfitness.com/products/pure-series-easy-bar-10lb-black"},
-
     # === 健身椅 ===
     {"title": "Pure Series 站立式收納5段調整健身椅(白)", "price": 5980, "url": "https://byzoomfitness.com/products/pure-series-foldable-bench-white"},
     {"title": "Pure Series 站立式收納5段調整健身椅(黑)", "price": 5980, "url": "https://byzoomfitness.com/products/pure-series-foldable-bench-black"},
-
     # === 啞鈴專用架 ===
-    {"title": "Pure Series 5.6/11.3/12.5 kg 可調式啞鈴專用架(白)", "price": 2480, "url": "https://byzoomfitness.com/products/pure-series-adjustable-dumbbell-stand-12-5lb-25lb-white"},
-    {"title": "Pure Series 5.6/11.3/12.5 kg 可調式啞鈴專用架(黑)", "price": 2480, "url": "https://byzoomfitness.com/products/pure-series-adjustable-dumbbell-stand-12-5lb-25lb-black"},
-    {"title": "Pure Series 22.6kg(50LB)/25kg(55LB) 可調式啞鈴專用架(白)", "price": 2380, "url": "https://byzoomfitness.com/products/pure-series-adjustable-dumbbell-stand-50lb-55lb-white"},
-    {"title": "Pure Series 22.6kg(50LB)/25kg(55LB) 可調式啞鈴專用架(黑)", "price": 2380, "url": "https://byzoomfitness.com/products/pure-series-adjustable-dumbbell-stand-50lb-55lb-black"},
-    {"title": "Classic Series 22.6kg(50LB)/25kg(55LB) 可調式啞鈴專用架(黑)", "price": 1980, "url": "https://byzoomfitness.com/products/classic-series-adjustable-dumbbell-stand-50lb-55lb-black"},
-
+    {"title": "Pure Series 5.6/11.3/12.5kg 可調式啞鈴專用架(白)", "price": 2480, "url": "https://byzoomfitness.com/products/pure-series-adjustable-dumbbell-stand-12-5lb-25lb-white"},
+    {"title": "Pure Series 5.6/11.3/12.5kg 可調式啞鈴專用架(黑)", "price": 2480, "url": "https://byzoomfitness.com/products/pure-series-adjustable-dumbbell-stand-12-5lb-25lb-black"},
+    {"title": "Pure Series 22.6kg/25kg 可調式啞鈴專用架(白)", "price": 2380, "url": "https://byzoomfitness.com/products/pure-series-adjustable-dumbbell-stand-50lb-55lb-white"},
+    {"title": "Pure Series 22.6kg/25kg 可調式啞鈴專用架(黑)", "price": 2380, "url": "https://byzoomfitness.com/products/pure-series-adjustable-dumbbell-stand-50lb-55lb-black"},
+    {"title": "Classic Series 可調式啞鈴專用架(黑)", "price": 1980, "url": "https://byzoomfitness.com/products/classic-series-adjustable-dumbbell-stand-50lb-55lb-black"},
     # === 瑜珈配件 ===
     {"title": "TPE 止滑輕巧瑜珈墊 4mm (淺粉)", "price": 980, "url": "https://byzoomfitness.com/products/tpe-yogamat-4mm-light-pink"},
     {"title": "TPE 止滑輕巧瑜珈墊 4mm (紫)", "price": 980, "url": "https://byzoomfitness.com/products/tpe-yogamat-4mm-purple"},
@@ -91,7 +85,6 @@ OFFICIAL_PRODUCTS = [
     {"title": "PVC 瑜珈墊 5MM (馬卡龍)", "price": 490, "url": "https://byzoomfitness.com/products/pvc-yoga-mat-5mm-blue"},
     {"title": "瑜珈繩(粉紫)", "price": 290, "url": "https://byzoomfitness.com/products/yoga-strap-purple"},
     {"title": "瑜珈墊背帶(粉紫)", "price": 350, "url": "https://byzoomfitness.com/products/yoga-mat-carrier-purple"},
-
     # === 按摩舒緩系列 ===
     {"title": "大理石紋 強化版按摩滾筒", "price": 990, "url": "https://byzoomfitness.com/products/marble-pattern-series-intense-foam-roller"},
     {"title": "大理石紋 舒緩版按摩滾筒", "price": 650, "url": "https://byzoomfitness.com/products/marble-pattern-series-foam-roller"},
@@ -101,7 +94,6 @@ OFFICIAL_PRODUCTS = [
     {"title": "淺羊絨色按摩球", "price": 290, "url": "https://byzoomfitness.com/products/massage-ball-cashmere-colored"},
     {"title": "天然軟木按摩球", "price": 290, "url": "https://byzoomfitness.com/products/massage-ball-cork"},
     {"title": "天然橡膠按摩花生球", "price": 290, "url": "https://byzoomfitness.com/products/natural-rubber-double-massage-ball"},
-
     # === 訓練配件 ===
     {"title": "健腹滾輪+(白)", "price": 890, "url": "https://byzoomfitness.com/products/ab-roller-plus-white"},
     {"title": "健腹滾輪+(黑)", "price": 890, "url": "https://byzoomfitness.com/products/ab-roller-plus-black"},
@@ -109,7 +101,6 @@ OFFICIAL_PRODUCTS = [
     {"title": "俯臥撐支架+(白)", "price": 790, "url": "https://byzoomfitness.com/products/push-up-handle-plus-white"},
     {"title": "俯臥撐支架+(黑)", "price": 790, "url": "https://byzoomfitness.com/products/push-up-handle-plus-black"},
     {"title": "1KG 皮拉提斯球(黑)", "price": 450, "url": "https://byzoomfitness.com/products/mini-pilates-ball-black"},
-
     # === 凱蒂瑜珈系列 ===
     {"title": "凱蒂瑜珈 Flow With Katie 天然橡膠瑜珈墊5mm", "price": 1680, "url": "https://byzoomfitness.com/products/katie-nbmat"},
     {"title": "凱蒂瑜珈 Flow With Katie TPE 止滑輕巧瑜珈墊 6mm", "price": 1280, "url": "https://byzoomfitness.com/products/katie-tpemat"},
@@ -120,7 +111,7 @@ OFFICIAL_PRODUCTS = [
 
 
 # ============================================================
-# 搜尋各平台函數
+# 搜尋各平台
 # ============================================================
 
 def search_momo(keyword):
@@ -260,7 +251,6 @@ def find_violations():
         official_price = product["price"]
         official_url = product["url"]
 
-        # 搜尋關鍵字（取前20字，去掉顏色括號）
         keyword = re.sub(r"[（(][白黑][)）]", "", title).strip()
         keyword = f"BYZOOM {keyword[:25]}"
 
@@ -289,6 +279,45 @@ def find_violations():
         time.sleep(0.5)
 
     return violations, scanned
+
+
+# ============================================================
+# Telegram 通知
+# ============================================================
+
+def send_telegram(violations):
+    if not TELEGRAM_TOKEN:
+        print("⚠️  TELEGRAM_TOKEN 未設定，跳過")
+        return
+
+    if violations:
+        lines = ["🚨 *BYZOOM 破價警報！*\n"]
+        for v in violations:
+            lines.append(
+                f"📦 *{v['product'][:35]}*\n"
+                f"🏪 平台：{v['platform']}\n"
+                f"💰 官網：TWD${v['official_price']:,}　→　平台：TWD${v['platform_price']:,}\n"
+                f"📉 便宜了 TWD${v['diff']:,}（{v['diff_pct']:.1f}%）\n"
+                f"🔗 [查看商品]({v['platform_url']})\n"
+            )
+        msg = "\n".join(lines)
+    else:
+        msg = "✅ *BYZOOM 今日巡價正常*\n\n所有平台價格均未低於官網，一切 OK 👍"
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    try:
+        resp = requests.post(url, json={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": msg,
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": True,
+        }, timeout=15)
+        if resp.status_code == 200:
+            print("✅ Telegram 通知發送成功")
+        else:
+            print(f"⚠️  Telegram 回應：{resp.status_code} {resp.text}")
+    except Exception as e:
+        print(f"❌ Telegram 發送失敗：{e}")
 
 
 # ============================================================
@@ -338,7 +367,7 @@ def build_html(violations, scanned, scan_time):
         <h2>📊 掃描摘要</h2>
         <table style="width:100%;border-collapse:collapse">
           <tr style="background:#f5f5f5"><td style="padding:10px;border:1px solid #ddd">🔍 監控平台</td><td style="padding:10px;border:1px solid #ddd">momo、PChome、Yahoo購物、蝦皮、酷澎</td></tr>
-          <tr><td style="padding:10px;border:1px solid #ddd">📦 比對商品數</td><td style="padding:10px;border:1px solid #ddd">{len(OFFICIAL_PRODUCTS)} 款</td></tr>
+          <tr><td style="padding:10px;border:1px solid #ddd">📦 監控商品數</td><td style="padding:10px;border:1px solid #ddd">{len(OFFICIAL_PRODUCTS)} 款</td></tr>
           <tr style="background:#f5f5f5"><td style="padding:10px;border:1px solid #ddd">📝 比對紀錄數</td><td style="padding:10px;border:1px solid #ddd">{scanned} 筆</td></tr>
           <tr><td style="padding:10px;border:1px solid #ddd">🚨 破價筆數</td>
             <td style="padding:10px;border:1px solid #ddd;color:{'#c00' if has_v else '#2e7d32'};font-weight:bold">{len(violations)} 筆</td></tr>
@@ -381,9 +410,10 @@ def main():
     for v in violations:
         print(f"  🚨 [{v['platform']}] {v['product'][:30]} | 官網${v['official_price']:,} → 平台${v['platform_price']:,} (▼{v['diff_pct']:.1f}%)")
 
+    send_telegram(violations)
+
     subject = (f"🚨【BYZOOM破價警報】發現{len(violations)}筆破價！{scan_time[:10]}"
                if violations else f"✅【BYZOOM巡價報告】今日正常｜{scan_time[:10]}")
-
     send_email(subject, build_html(violations, scanned, scan_time))
 
     with open("price_report.json", "w", encoding="utf-8") as f:
